@@ -24,9 +24,9 @@ exports.getEtlPipeline = async (req, res) => {
   if (multiValues.length) {
     var stmtMultival = await services.getTemplateByName('MULTIVALUE');
     var singleValueFields = singleValues
-      .map((x) => `XMLRECORD['${x.name}'] AS ${x.name}`)
+      .map((x) => `\tXMLRECORD['${x.name}'] AS ${x.name}`)
       .join(',\n');
-
+    var multiValueFields = multiValues.map((x) => `'${x.name}'`).join(',');
     stmtMultival = eval('`' + stmtMultival + '`');
     var selectedSingle = singleValues.map((x) => {
       var output;
@@ -35,23 +35,23 @@ exports.getEtlPipeline = async (req, res) => {
       } else {
         output = x.name;
       }
-      if (x.type != 'string') {
-        output = `CAST(${output} AS ${x.type})`;
+      if (x.type[1] != 'string') {
+        output = `CAST(${output} AS ${x.type[1]})`;
       }
-      return `${output} AS ${x.name}`;
+      return `\t${output} AS ${x.name}`;
     });
-    var selectedMulti = multivalues.map((x) => {
+    var selectedMulti = multiValues.map((x) => {
       var output;
       if (x.transformation != '') {
         output = x.transformation(x.name, `XML_MV['${x.name}']`);
       } else {
         output = `XML_MV['${x.name}']`;
       }
-      if (x.type != 'string') {
-        output = `CAST(${output} AS ${x.type})`;
+      if (x.type[1] != 'string') {
+        output = `CAST(${output} AS ${x.type[1]})`;
       }
 
-      return `${output} AS ${x.name}`;
+      return `\t${output} AS ${x.name}`;
     });
     selectedFields = selectedSingle.concat(selectedMulti).join(',\n');
     sourceStream = `${schemaName}_MULTIVALUE`;
@@ -73,10 +73,10 @@ exports.getEtlPipeline = async (req, res) => {
         } else if (x.transformation == 'parse timestamp') {
           output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${x.name}'], 'yyMMddHHmm') ${x.name}`;
         }
-        if (x.type != 'string') {
-          output = `CAST(${output} AS ${x.type})`;
+        if (x.type[1] != 'string') {
+          output = `CAST(${output} AS ${x.type[1]})`;
         }
-        return `\t${output} as ${name}`;
+        return `\t${output} AS ${name}`;
       })
       .join(',\n');
     sourceStream = `${schemaName}_MAPPED`;
