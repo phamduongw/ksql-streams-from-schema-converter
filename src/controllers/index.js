@@ -12,13 +12,7 @@ exports.getProcDataByKey = async (req, res) => {
 
 // [POST] /api/etl-pipeline
 exports.getEtlPipeline = async (req, res) => {
-  var {
-    procName,
-    schemaName,
-    procType: type,
-    blobDelimiter: blobDelim,
-    procData,
-  } = req.body;
+  var { procName, schemaName, procType: type, blobDelim, procData } = req.body;
 
   var selectedFields = [];
   var sourceStream = null;
@@ -82,7 +76,7 @@ exports.getEtlPipeline = async (req, res) => {
         if (x.type != 'string') {
           output = `CAST(${output} AS ${x.type})`;
         }
-        return `${output} as ${name}`;
+        return `\t${output} as ${name}`;
       })
       .join(',\n');
     sourceStream = `${schemaName}_MAPPED`;
