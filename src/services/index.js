@@ -28,11 +28,11 @@ const connectToCouchbase = async () => {
   }
 };
 
-const getSchema = async (key) => {
+const getSchemaByName = async (name) => {
   try {
     const query =
       'SELECT meta().id as schema_name, fields FROM `schema` USE KEYS [$1]';
-    const result = await scope.query(query, { parameters: [key] });
+    const result = await scope.query(query, { parameters: [name] });
     return result.rows[0];
   } catch (error) {
     console.error('Error getting schema:', error);
@@ -40,4 +40,32 @@ const getSchema = async (key) => {
   }
 };
 
-module.exports = { connectToCouchbase, getSchema };
+const getAllTemplate = async () => {
+  try {
+    const query =
+      'SELECT meta().id as template_name, template as template from `stream_templates`';
+    const result = await scope.query(query);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting schema:', error);
+    throw error;
+  }
+};
+
+const getTemplateByName = async (name) => {
+  try {
+    const query = 'SELECT template from `stream_templates` USE KEYS [$1]';
+    const result = await scope.query(query, { parameters: [name] });
+    return result.rows[0].template.replace(/`/g, '\\`');
+  } catch (error) {
+    console.error('Error getting schema:', error);
+    throw error;
+  }
+};
+
+module.exports = {
+  connectToCouchbase,
+  getSchemaByName,
+  getAllTemplate,
+  getTemplateByName,
+};
