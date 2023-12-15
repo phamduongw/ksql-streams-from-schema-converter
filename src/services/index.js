@@ -40,7 +40,7 @@ const getSchemaByName = async (name) => {
   }
 };
 
-const getAllTemplate = async () => {
+const getAllTemplates = async () => {
   try {
     const query =
       'SELECT meta().id as template_name, template as template from `stream_templates`';
@@ -50,6 +50,22 @@ const getAllTemplate = async () => {
     console.error('Error getting schema:', error);
     throw error;
   }
+};
+
+const updateAllTemplates = async (templates) => {
+  const collection = scope.collection('stream_templates');
+  const updatePromises = templates.map(async ({ template_name, template }) => {
+    try {
+      if (template) {
+        await collection.upsert(template_name, { template });
+      } else {
+        await collection.remove(template_name);
+      }
+    } catch (error) {
+      console.error(`Error updating template ${template_name}:`, error);
+    }
+  });
+  await Promise.all(updatePromises);
 };
 
 const getTemplateByName = async (name) => {
@@ -66,6 +82,7 @@ const getTemplateByName = async (name) => {
 module.exports = {
   connectToCouchbase,
   getSchemaByName,
-  getAllTemplate,
+  getAllTemplates,
+  updateAllTemplates,
   getTemplateByName,
 };

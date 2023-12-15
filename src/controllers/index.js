@@ -1,9 +1,5 @@
 const services = require('~/services');
 
-exports.test = (req, res) => {
-  res.json({ message: 'Hello, World!' });
-};
-
 // [GET] /api/proc-data/{schemaName}
 exports.getProcDataByKey = async (req, res) => {
   let result = await services.getSchemaByName(req.query.schemaName);
@@ -95,12 +91,18 @@ exports.getEtlPipeline = async (req, res) => {
 };
 
 // [GET] /api/template/all
-exports.getAllTemplate = async (req, res) => {
-  let result = await services.getAllTemplate();
+exports.getAllTemplates = async (req, res) => {
+  let result = await services.getAllTemplates();
   res.status(200).send(result);
 };
 
-// [GET] /api/templates/{templateName}
+// [PUT] /api/template/all
+exports.updateAllTemplates = async (req, res) => {
+  await services.updateAllTemplates(req.body.templateData);
+  res.status(200).send({ status: 'success' });
+};
+
+// [GET] /api/template/{templateName}
 exports.getTemplateByName = async (req, res) => {
   let result = await services.getTemplateByName(req.query.templateName);
   res.status(200).send(result);
