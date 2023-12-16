@@ -1,6 +1,6 @@
 const services = require('~/services');
 
-// [GET] /api/proc-data/{schemaName}
+// [GET] /api/proc-data?{schemaName}
 exports.getProcDataByKey = async (req, res) => {
   let result = await services.getSchemaByName(req.query.schemaName);
   res.status(200).send(result);
@@ -8,7 +8,14 @@ exports.getProcDataByKey = async (req, res) => {
 
 // [POST] /api/etl-pipeline
 exports.getEtlPipeline = async (req, res) => {
-  var { procName, schemaName, procType: type, blobDelim, procData } = req.body;
+  var {
+    collectionName,
+    procName,
+    schemaName,
+    procType: type,
+    blobDelim,
+    procData,
+  } = req.body;
 
   var selectedFields = [];
   var sourceStream = null;
@@ -18,7 +25,10 @@ exports.getEtlPipeline = async (req, res) => {
   var stmtSink = null;
 
   if (multiValues.length) {
-    var stmtMultival = await services.getTemplateByName('MULTIVALUE');
+    var stmtMultival = await services.getTemplateByName(
+      collectionName,
+      'MULTIVALUE',
+    );
     var singleValueFields = singleValues
       .map((x) => `\tXMLRECORD['${x.name}'] AS ${x.name}`)
       .join(',\n');
@@ -51,9 +61,12 @@ exports.getEtlPipeline = async (req, res) => {
     });
     selectedFields = selectedSingle.concat(selectedMulti).join(',\n');
     sourceStream = `${schemaName}_MULTIVALUE`;
-    stmtSink = await services.getTemplateByName('SINK_MULTIVALUE');
+    stmtSink = await services.getTemplateByName(
+      collectionName,
+      'SINK_MULTIVALUE',
+    );
   } else {
-    stmtSink = await services.getTemplateByName('SINK');
+    stmtSink = await services.getTemplateByName(collectionName, 'SINK');
     selectedFields = singleValues
       .map((x, index) => {
         var output = '';
@@ -77,9 +90,9 @@ exports.getEtlPipeline = async (req, res) => {
       .join(',\n');
     sourceStream = `${schemaName}_MAPPED`;
   }
-  var stmtRaw = await services.getTemplateByName('RAW');
+  var stmtRaw = await services.getTemplateByName(collectionName, 'RAW');
   stmtRaw = eval('`' + stmtRaw + '`');
-  var stmtMapped = await services.getTemplateByName(type);
+  var stmtMapped = await services.getTemplateByName(collectionName, type);
   stmtMapped = eval('`' + stmtMapped + '`');
   stmtSink = eval('`' + stmtSink + '`');
   res.status(200).send({
@@ -90,20 +103,34 @@ exports.getEtlPipeline = async (req, res) => {
   });
 };
 
-// [GET] /api/template/all
+// [GET] /api/template/all?{collectionName}
 exports.getAllTemplates = async (req, res) => {
-  let result = await services.getAllTemplates();
+  let result = await services.getAllTemplates(req.query.collectionName);
   res.status(200).send(result);
 };
 
 // [PUT] /api/template/all
 exports.updateAllTemplates = async (req, res) => {
-  await services.updateAllTemplates(req.body.templateData);
+  const { collectionName, templateData } = req.body;
+  await services.updateAllTemplates(collectionName, templateData);
   res.status(200).send({ status: 'success' });
 };
 
-// [GET] /api/template/{templateName}
+// [GET] /api/template?{templateName}
 exports.getTemplateByName = async (req, res) => {
-  let result = await services.getTemplateByName(req.query.templateName);
+  const { collectionName, templateName } = req.query;
+  let result = await services.getTemplateByName(collectionName, templateName);
+  res.status(200).send(result);
+};
+
+// [POST] /api/execute/{query}
+exports.executeQuery = async (req, res) => {
+  let result = await services.executeQuery(req.body.query);
+  res.status(200).send(result);
+};
+
+// [POST] /api/createTestData?{collectionName}
+exports.createTestData = async (req, res) => {
+  let result = await services.createTestData(req.query.collectionName);
   res.status(200).send(result);
 };

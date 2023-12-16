@@ -19,8 +19,8 @@ const connectToCouchbase = async () => {
       process.env.COUCHBASE_URL,
       connectionOptions,
     );
-    bucket = cluster.bucket(process.env.COUCHBASE_BUCKET_NAME);
-    scope = bucket.scope(process.env.COUCHBASE_SCOPE_NAME);
+    bucket = cluster.bucket(process.env.COUCHBASE_BUCKET);
+    scope = bucket.scope(process.env.COUCHBASE_SCOPE);
     console.log('Connected to Couchbase');
   } catch (error) {
     console.error('Error connecting to Couchbase:', error);
@@ -40,10 +40,9 @@ const getSchemaByName = async (name) => {
   }
 };
 
-const getAllTemplates = async () => {
+const getAllTemplates = async (collectionName) => {
   try {
-    const query =
-      'SELECT meta().id as template_name, template as template from `stream_templates`';
+    const query = `SELECT meta().id as template_name, template as template from \`${collectionName}\``;
     const result = await scope.query(query);
     return result.rows;
   } catch (error) {
@@ -52,8 +51,8 @@ const getAllTemplates = async () => {
   }
 };
 
-const updateAllTemplates = async (templates) => {
-  const collection = scope.collection('stream_templates');
+const updateAllTemplates = async (collectionName, templates) => {
+  const collection = scope.collection(collectionName);
   const updatePromises = templates.map(async ({ template_name, template }) => {
     try {
       if (template) {
@@ -68,15 +67,35 @@ const updateAllTemplates = async (templates) => {
   await Promise.all(updatePromises);
 };
 
-const getTemplateByName = async (name) => {
+const getTemplateByName = async (collectionName, templateName) => {
   try {
-    const query = 'SELECT template from `stream_templates` USE KEYS [$1]';
-    const result = await scope.query(query, { parameters: [name] });
+    const query = `SELECT template from \`${collectionName}\` USE KEYS [$1]`;
+    const result = await scope.query(query, { parameters: [templateName] });
     return result.rows[0].template.replace(/`/g, '\\`');
   } catch (error) {
     console.error('Error getting schema:', error);
     throw error;
   }
+};
+
+// Test query
+const executeQuery = async (query) => {
+  try {
+    const result = await scope.query(query);
+    return result.rows;
+  } catch (error) {
+    console.error('Error executing query:', error);
+    throw error;
+  }
+};
+
+// Test data
+const createTestData = async (collectionName) => {
+  const result = await updateAllTemplates(
+    collectionName,
+    await getAllTemplates(),
+  );
+  return result;
 };
 
 module.exports = {
@@ -85,4 +104,6 @@ module.exports = {
   getAllTemplates,
   updateAllTemplates,
   getTemplateByName,
+  executeQuery,
+  createTestData,
 };
