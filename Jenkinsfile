@@ -19,8 +19,7 @@ pipeline {
 
         stage("Stop and Remove"){
             steps {
-                sh "docker stop ${DOCKER_IMAGE_NAME} || echo 'This container does not exist.'"
-                sh 'echo y | docker container prune'
+                sh "docker stop ${DOCKER_IMAGE_NAME} && docker rm ${DOCKER_IMAGE_NAME} || echo 'This container does not exist.'"
             }
         }
 
