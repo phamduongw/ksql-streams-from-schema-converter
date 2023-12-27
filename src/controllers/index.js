@@ -44,7 +44,7 @@ exports.getEtlPipeline = async (req, res) => {
       if (x.type[1] != 'string') {
         output = `CAST(${output} AS ${x.type[1]})`;
       }
-      return `\t${output} AS ${x.name}`;
+      return `\t${output} AS ${x.name},`;
     });
     var selectedMulti = multiValues.map((x) => {
       var output;
@@ -57,7 +57,7 @@ exports.getEtlPipeline = async (req, res) => {
         output = `CAST(${output} AS ${x.type[1]})`;
       }
 
-      return `\t${output} AS ${x.name}`;
+      return `\t${output} AS ${x.name},`;
     });
     selectedFields = selectedSingle.concat(selectedMulti).join(',\n');
     sourceStream = `${schemaName}_MULTIVALUE`;
@@ -78,14 +78,14 @@ exports.getEtlPipeline = async (req, res) => {
         } else if (x.transformation == 'string-join') {
           output = `TRIM(CONCAT(DATA.XMLRECORD['${x.name}'], REGEXP_REPLACE(DATA.XMLRECORD['${x.name}_multivalue'], '(^s?1|#s?[0-9]+):', ' ')))`;
         } else if (x.transformation == 'parse date') {
-          output = `PARSE_DATE(DATA.XMLRECORD['${x.name}'], 'yyyyMMdd') ${x.name}`;
+          output = `PARSE_DATE(DATA.XMLRECORD['${x.name}'], 'yyyyMMdd')`;
         } else if (x.transformation == 'parse timestamp') {
-          output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${x.name}'], 'yyMMddHHmm') ${x.name}`;
+          output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${x.name}'], 'yyMMddHHmm')`;
         }
         if (x.type[1] != 'string') {
           output = `CAST(${output} AS ${x.type[1]})`;
         }
-        return `\t${output} AS ${name}`;
+        return `\t${output} AS ${name},`;
       })
       .join(',\n');
     sourceStream = `${schemaName}_MAPPED`;
