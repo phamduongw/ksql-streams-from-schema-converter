@@ -75,8 +75,17 @@ exports.getEtlPipeline = async (req, res) => {
           : x.name;
         if (x.transformation == '') {
           output = `XMLRECORD['${x.name}']`;
-        } else if (x.transformation == 'string-join') {
-          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${x.name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
+        } else if (x.transformation.includes('string-join')) {
+          const pattern = /\('*([^']*)'*\)$/;
+          if (pattern.test(x.transformation)) {
+            output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${
+              x.name
+            }_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
+              x.transformation.match(pattern)[1]
+            }')`;
+          } else {
+            output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${x.name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
+          }
         } else if (x.transformation == 'parse date') {
           output = `PARSE_DATE(DATA.XMLRECORD['${x.name}'], 'yyyyMMdd')`;
         } else if (x.transformation == 'parse timestamp') {
