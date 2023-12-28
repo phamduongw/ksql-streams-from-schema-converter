@@ -76,7 +76,7 @@ exports.getEtlPipeline = async (req, res) => {
         if (x.transformation == '') {
           output = `XMLRECORD['${x.name}']`;
         } else if (x.transformation == 'string-join') {
-          output = `TRIM(CONCAT(DATA.XMLRECORD['${x.name}'], REGEXP_REPLACE(DATA.XMLRECORD['${x.name}_multivalue'], '(^s?1|#s?[0-9]+):', ' ')))`;
+          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${x.name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
         } else if (x.transformation == 'parse date') {
           output = `PARSE_DATE(DATA.XMLRECORD['${x.name}'], 'yyyyMMdd')`;
         } else if (x.transformation == 'parse timestamp') {
