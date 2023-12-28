@@ -73,6 +73,15 @@ exports.getEtlPipeline = async (req, res) => {
         const name = x.name.startsWith('LOCALREF_')
           ? x.name.split('LOCALREF_')[1]
           : x.name;
+
+        if (x.name == 'INPUTTER_HIS') {
+          output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['INPUTTER_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
+          if (x.type[1] != 'string') {
+            output = `CAST(${output} AS ${x.type[1]})`;
+          }
+          return `\t${output} AS INPUTTER_HIS,`;
+        }
+
         if (x.transformation == '') {
           output = `XMLRECORD['${x.name}']`;
         } else if (x.transformation.includes('string-join')) {
