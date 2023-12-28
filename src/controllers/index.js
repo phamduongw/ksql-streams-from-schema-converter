@@ -81,6 +81,8 @@ exports.getEtlPipeline = async (req, res) => {
           output = `PARSE_DATE(DATA.XMLRECORD['${x.name}'], 'yyyyMMdd')`;
         } else if (x.transformation == 'parse timestamp') {
           output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${x.name}'], 'yyMMddHHmm')`;
+        } else if (x.transformation == 'substring') {
+          output = `SUBSTRING(DATA.XMLRECORD['${x.name}'],1,35)`;
         }
         if (x.type[1] != 'string') {
           output = `CAST(${output} AS ${x.type[1]})`;
