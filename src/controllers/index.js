@@ -92,6 +92,12 @@ exports.getEtlPipeline = async (req, res) => {
           output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${x.name}'], 'yyMMddHHmm')`;
         } else if (x.transformation == 'substring') {
           output = `SUBSTRING(DATA.XMLRECORD['${x.name}'],1,35)`;
+        } else if (/^\[(.*)\]$/.test(x.transformation)) {
+          output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${
+            x.name
+          }_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+            x.transformation.match(/^\[(.*)\]$/)[1]
+          }]`;
         }
         if (x.type[1] != 'string') {
           output = `CAST(${output} AS ${x.type[1]})`;
