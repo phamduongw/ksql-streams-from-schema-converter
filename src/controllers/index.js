@@ -100,7 +100,11 @@ exports.getEtlPipeline = async (req, res) => {
           }]`;
         } else if (/(.*\(.*\))\s([^,]*),*$/.test(x.transformation)) {
           const matches = x.transformation.match(/(.*\(.*\))\s([^,]*),*$/);
-          output = matches[1].replace('$', `DATA.XMLRECORD['${x.name}']`);
+          if (x.name == 'RECID') {
+            output = matches[1].replace('$', `DATA.RECID`);
+          } else {
+            output = matches[1].replace('$', `DATA.XMLRECORD['${x.name}']`);
+          }
           if (x.type[1] != 'string') {
             output = `CAST(${output} AS ${x.type[1]})`;
           }
