@@ -1,6 +1,7 @@
 require('module-alias/register');
 
 const express = require('express');
+const path = require('path');
 const morgan = require('morgan');
 const cors = require('cors');
 
@@ -10,6 +11,9 @@ const { connectToCouchbase } = require('~/services');
 
 const app = express();
 const port = 80;
+
+// Use Static Folder
+app.use(express.static(path.join(__dirname, 'public')));
 
 // HTTP Logger
 app.use(morgan('combined'));
