@@ -98,6 +98,13 @@ exports.getEtlPipeline = async (req, res) => {
           }_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
             x.transformation.match(/^\[(.*)\]$/)[1]
           }]`;
+        } else if (/(.*\(.*\))\s([^,]*),*$/.test(x.transformation)) {
+          const matches = x.transformation.match(/(.*\(.*\))\s([^,]*),*$/);
+          output = matches[1].replace('$', `DATA.XMLRECORD['${x.name}']`);
+          if (x.type[1] != 'string') {
+            output = `CAST(${output} AS ${x.type[1]})`;
+          }
+          return `\t${output} AS ${matches[2]},`;
         }
         if (x.type[1] != 'string') {
           output = `CAST(${output} AS ${x.type[1]})`;
