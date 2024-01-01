@@ -20,9 +20,8 @@ exports.getEtlPipeline = async (req, res) => {
   const singleValues = procData.filter(
     (procItem) => procItem['should_parse_sv'],
   );
-  const multiValues = procData.filter(
-    (procItem) => procItem['should_parse_mv'],
-  );
+  const vms = procData.filter((procItem) => procItem['should_parse_vm']);
+  const vss = procData.filter((procItem) => procItem['should_parse_vs']);
 
   let stmtRaw = await services.getTemplateByName(collectionName, 'RAW');
   let stmtMapped = await services.getTemplateByName(collectionName, procType);
@@ -32,8 +31,10 @@ exports.getEtlPipeline = async (req, res) => {
   let sourceStream;
   let selectedFields;
   let listSelectedField;
+  let vm;
+  let vs;
 
-  if (multiValues.length) {
+  if (vms.length) {
     sourceStream = `${schemaName}_MULTIVALUE`;
     stmtSink = await services.getTemplateByName(
       collectionName,
@@ -61,6 +62,8 @@ exports.getEtlPipeline = async (req, res) => {
         return `\t${output} AS ${fieldName}`;
       })
       .join(',\n');
+    vm = vms.map(({ name }) => `'${name}'`).join(', ');
+    vs = vss.map(({ name }) => `'${name}'`).join(', ') || `''`;
   } else {
     sourceStream = `${schemaName}_MAPPED`;
     stmtSink = await services.getTemplateByName(collectionName, 'SINK');
