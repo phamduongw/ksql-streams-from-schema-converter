@@ -44,6 +44,7 @@ exports.getEtlPipeline = async (req, res) => {
       collectionName,
       'MULTIVALUE',
     );
+
     listSelectedField = singleValues
       .map(({ name, transformation }) => {
         let output = `DATA.XMLRECORD['${name}']`;
@@ -62,11 +63,117 @@ exports.getEtlPipeline = async (req, res) => {
         return `\t${output} AS ${fieldName}`;
       })
       .join(',\n');
+
     vm = vms.map(({ name }) => `'${name}'`).join(', ');
     vs = vss.map(({ name }) => `'${name}'`).join(', ') || `''`;
+
+    selectedSingle = singleValues.map(({ name, transformation, type }) => {
+      let output;
+      let fieldName = name.startsWith('LOCALREF_')
+        ? name.split('LOCALREF_')[1]
+        : name;
+      if (name === 'INPUTTER_HIS') {
+        output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.INPUTTER,'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
+        fieldName = 'INPUTTER_HIS';
+      } else if (transformation === '') {
+        output = `DATA.${name}`;
+      } else if (transformation.includes('string-join')) {
+        const pattern = /\('*([^']*)'*\)$/;
+        if (pattern.test(transformation)) {
+          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.${name},'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
+            transformation.match(pattern)[1]
+          }')`;
+        } else {
+          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.${name},'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
+        }
+      } else if (transformation == 'parse date') {
+        output = `PARSE_DATE(DATA.${name}'], 'yyyyMMdd')`;
+      } else if (transformation == 'parse timestamp') {
+        output = `PARSE_TIMESTAMP(DATA.${name}'], 'yyMMddHHmm')`;
+      } else if (transformation == 'substring') {
+        output = `SUBSTRING(DATA.${name}'],1,35)`;
+      } else if (/^\[(.*)\]$/.test(transformation)) {
+        output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+          transformation.match(/^\[(.*)\]$/)[1]
+        }]`;
+      } else if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
+        const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
+        if (name == 'RECID') {
+          output = matches[1].replace('$', `DATA.RECID`);
+        } else {
+          output = matches[1].replace('$', `DATA.${matches[2]}`);
+        }
+        fieldName = matches[2];
+      } else if (/(.*)\(\[(.*)\](.*)\)$/.test(transformation)) {
+        const matches = transformation.match(/(.*)\(\[(.*)\](.*)\)$/);
+        if (/[^,\s]/.test(matches[3])) {
+          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}]${matches[3]})`;
+        } else {
+          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}], 'yyMMddHHmm')`;
+        }
+      }
+      if (type[1] !== 'string') {
+        output = `CAST(${output} AS ${type[1]})`;
+      }
+      return `\t${output} AS ${fieldName}`;
+    });
+
+    selectedMulti = vms.map(({ name, transformation, type }) => {
+      let output;
+      let fieldName = name.startsWith('LOCALREF_')
+        ? name.split('LOCALREF_')[1]
+        : name;
+      if (name === 'INPUTTER_HIS') {
+        output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['INPUTTER_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
+        fieldName = 'INPUTTER_HIS';
+      } else if (transformation === '') {
+        output = `XMLRECORD['${name}']`;
+      } else if (transformation.includes('string-join')) {
+        const pattern = /\('*([^']*)'*\)$/;
+        if (pattern.test(transformation)) {
+          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
+            transformation.match(pattern)[1]
+          }')`;
+        } else {
+          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
+        }
+      } else if (transformation == 'parse date') {
+        output = `PARSE_DATE(DATA.XMLRECORD['${name}'], 'yyyyMMdd')`;
+      } else if (transformation == 'parse timestamp') {
+        output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${name}'], 'yyMMddHHmm')`;
+      } else if (transformation == 'substring') {
+        output = `SUBSTRING(DATA.XMLRECORD['${name}'],1,35)`;
+      } else if (/^\[(.*)\]$/.test(transformation)) {
+        output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+          transformation.match(/^\[(.*)\]$/)[1]
+        }]`;
+      } else if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
+        const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
+        if (name == 'RECID') {
+          output = matches[1].replace('$', `DATA.RECID`);
+        } else {
+          output = matches[1].replace('$', `DATA.XMLRECORD['${name}']`);
+        }
+        fieldName = matches[2];
+      } else if (/(.*)\(\[(.*)\](.*)\)$/.test(transformation)) {
+        const matches = transformation.match(/(.*)\(\[(.*)\](.*)\)$/);
+        if (/[^,\s]/.test(matches[3])) {
+          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}]${matches[3]})`;
+        } else {
+          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}], 'yyMMddHHmm')`;
+        }
+      }
+      if (type[1] !== 'string') {
+        output = `CAST(${output} AS ${type[1]})`;
+      }
+      return `\t${output} AS ${fieldName}`;
+    });
+
+    selectedFields = selectedSingle.concat(selectedMulti).join(',\n');
   } else {
     sourceStream = `${schemaName}_MAPPED`;
     stmtSink = await services.getTemplateByName(collectionName, 'SINK');
+
     selectedFields = singleValues
       .map(({ name, transformation, type }) => {
         let output;
