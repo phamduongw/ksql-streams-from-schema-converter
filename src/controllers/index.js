@@ -31,6 +31,7 @@ exports.getEtlPipeline = async (req, res) => {
 
   let sourceStream;
   let selectedFields;
+  let listSelectedField;
 
   if (multiValues.length) {
     sourceStream = `${schemaName}_MULTIVALUE`;
@@ -42,31 +43,24 @@ exports.getEtlPipeline = async (req, res) => {
       collectionName,
       'MULTIVALUE',
     );
-    selectedSingle = singleValues.map(({ name, transformation, type }) => {
-      let output;
-      if (transformation !== '') {
-        output = transformation;
-      } else {
-        output = name;
-      }
-      if (type[1] !== 'string') {
-        output = `CAST(${output} AS ${type[1]})`;
-      }
-      return `\t${output} AS ${name},`;
-    });
-    selectedMulti = multiValues.map(({ name, transformation, type }) => {
-      let output;
-      if (transformation !== '') {
-        output = transformation(name, `XML_MV['${name}']`);
-      } else {
-        output = `XML_MV['${name}']`;
-      }
-      if (type[1] !== 'string') {
-        output = `CAST(${output} AS ${type[1]})`;
-      }
-      return `\t${output} AS ${name},`;
-    });
-    selectedFields = selectedSingle.concat(selectedMulti).join(',\n');
+    listSelectedField = singleValues
+      .map(({ name, transformation }) => {
+        let output = `DATA.XMLRECORD['${name}']`;
+        let fieldName = name.startsWith('LOCALREF_')
+          ? name.split('LOCALREF_')[1]
+          : name;
+        if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
+          const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
+          fieldName = matches[2];
+        } else if (
+          transformation.includes('string-join') ||
+          /^\[(.*)\]$/.test(transformation)
+        ) {
+          output = `DATA.XMLRECORD['${name}_multivalue']`;
+        }
+        return `\t${output} AS ${fieldName}`;
+      })
+      .join(',\n');
   } else {
     sourceStream = `${schemaName}_MAPPED`;
     stmtSink = await services.getTemplateByName(collectionName, 'SINK');
@@ -119,7 +113,7 @@ exports.getEtlPipeline = async (req, res) => {
         if (type[1] !== 'string') {
           output = `CAST(${output} AS ${type[1]})`;
         }
-        return `\t${output} AS ${fieldName},`;
+        return `\t${output} AS ${fieldName}`;
       })
       .join(',\n');
   }
