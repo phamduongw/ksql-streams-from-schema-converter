@@ -145,7 +145,15 @@ exports.getEtlPipeline = async (req, res) => {
         const matches2 = matches[2].match(/^\[(.*)\](.*)$/);
 
         let field = `DATA.XMLRECORD['${name}']`;
-        let params = `, 'yyMMddHHmm'`;
+        let params;
+
+        if (transformation.includes('parse_date')) {
+          params = `, 'yyyyMMdd'`;
+        } else if (transformation.includes('parse_timestamp')) {
+          params = `, 'yyMMddHHmm'`;
+        } else if (transformation.includes('substring')) {
+          params = `,1,35`;
+        }
 
         if (name === 'RECID') {
           field = 'DATA.RECID';
@@ -155,7 +163,9 @@ exports.getEtlPipeline = async (req, res) => {
           params = matches2[2];
         }
 
-        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
+        output = `${matches[1].toUpperCase()}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+          matches2[1]
+        }]${params})`;
       }
     }
     if (type[1] !== 'string') {
