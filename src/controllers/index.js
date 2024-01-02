@@ -34,7 +34,137 @@ exports.getEtlPipeline = async (req, res) => {
   let vm;
   let vs;
 
-  if (vms.length) {
+  const singleHandler = ({ name, transformation, type }) => {
+    let output;
+    let fieldName = name.startsWith('LOCALREF_')
+      ? name.split('LOCALREF_')[1]
+      : name;
+    if (name === 'INPUTTER_HIS') {
+      output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['INPUTTER_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
+      fieldName = 'INPUTTER_HIS';
+    } else if (transformation === '') {
+      output = `XMLRECORD['${name}']`;
+    } else if (transformation.includes('string-join')) {
+      const pattern = /\('*([^']*)'*\)$/;
+      if (pattern.test(transformation)) {
+        output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
+          transformation.match(pattern)[1]
+        }')`;
+      } else {
+        output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
+      }
+    } else if (transformation == 'parse_date') {
+      output = `PARSE_DATE(DATA.XMLRECORD['${name}'], 'yyyyMMdd')`;
+    } else if (transformation == 'parse_timestamp') {
+      output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${name}'], 'yyMMddHHmm')`;
+    } else if (transformation == 'substring') {
+      output = `SUBSTRING(DATA.XMLRECORD['${name}'],1,35)`;
+    } else if (/^\[(.*)\]$/.test(transformation)) {
+      output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+        transformation.match(/^\[(.*)\]$/)[1]
+      }]`;
+    } else if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
+      const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
+      if (name == 'RECID') {
+        output = matches[1].replace('$', `DATA.RECID`);
+      } else {
+        output = matches[1].replace('$', `DATA.XMLRECORD['${name}']`);
+      }
+      fieldName = matches[2];
+    } else if (/(.*)\(\[(.*)\](.*)\)$/.test(transformation)) {
+      const matches = transformation.match(/(.*)\(\[(.*)\](.*)\)$/);
+      if (/[^,\s]/.test(matches[3])) {
+        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}]${matches[3]})`;
+      } else {
+        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}], 'yyMMddHHmm')`;
+      }
+    }
+    if (type[1] !== 'string') {
+      output = `CAST(${output} AS ${type[1]})`;
+    }
+    return `\t${output} AS ${fieldName},`;
+  };
+
+  const multiHandler = ({ name, transformation, type }) => {
+    let output;
+    let fieldName = name.startsWith('LOCALREF_')
+      ? name.split('LOCALREF_')[1]
+      : name;
+    if (name === 'INPUTTER_HIS') {
+      output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['INPUTTER'],'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
+      fieldName = 'INPUTTER_HIS';
+    } else if (transformation === '') {
+      output = `XMLRECORD['${name}']`;
+    } else if (transformation.includes('string-join')) {
+      const pattern = /\('*([^']*)'*\)$/;
+      if (pattern.test(transformation)) {
+        output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
+          transformation.match(pattern)[1]
+        }')`;
+      } else {
+        output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
+      }
+    } else if (transformation == 'parse_date') {
+      output = `PARSE_DATE(DATA.XMLRECORD['${name}'], 'yyyyMMdd')`;
+    } else if (transformation == 'parse_timestamp') {
+      output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${name}'], 'yyMMddHHmm')`;
+    } else if (transformation == 'substring') {
+      output = `SUBSTRING(DATA.XMLRECORD['${name}'],1,35)`;
+    } else if (/^\[(.*)\]$/.test(transformation)) {
+      output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+        transformation.match(/^\[(.*)\]$/)[1]
+      }]`;
+      // } else if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
+      //   const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
+      //   if (name == 'RECID') {
+      //     output = matches[1].replace('$', `DATA.RECID`);
+      //   } else {
+      //     output = matches[1].replace('$', `DATA.XMLRECORD['${name}']`);
+      //   }
+      //   fieldName = matches[2];
+      // } else if (/(.*)\(\[(.*)\](.*)\)$/.test(transformation)) {
+      //   const matches = transformation.match(/(.*)\(\[(.*)\](.*)\)$/);
+      //   if (/[^,\s]/.test(matches[3])) {
+      //     output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}]${matches[3]})`;
+      //   } else {
+      //     output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}], 'yyMMddHHmm')`;
+      //   }
+    } else if (/(.*)\((.*)\)\s*(.*)$/.test(transformation)) {
+      const matches = transformation.match(/(.*)\((.*)\)\s*(.*)$/);
+      if (/^\$/.test(matches[2])) {
+        if (name === 'RECID') {
+          output = `${matches[1]}(${matches[2].replace('$', `DATA.RECID`)})`;
+        } else {
+          output = `${matches[1]}(${matches[2].replace(
+            '$',
+            `DATA.XMLRECORD['${name}']`,
+          )})`;
+        }
+        fieldName = matches[3];
+      } else if (/^\[.*\](.*)$/.test(matches[2])) {
+        const matches2 = matches[2].match(/^\[(.*)\](.*)$/);
+
+        let field = `DATA.XMLRECORD['${name}']`;
+        let params = `, 'yyMMddHHmm'`;
+
+        if (name === 'RECID') {
+          field = 'DATA.RECID';
+        }
+
+        if (/[^,\s]/.test(matches2[2])) {
+          params = matches2[2];
+        }
+
+        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
+      }
+    }
+    if (type[1] !== 'string') {
+      output = `CAST(${output} AS ${type[1]})`;
+    }
+    return `\t${output} AS ${fieldName},`;
+  };
+
+  if (vms.length || vss.length) {
     sourceStream = `${schemaName}_MULTIVALUE`;
     stmtSink = await services.getTemplateByName(
       collectionName,
@@ -56,7 +186,8 @@ exports.getEtlPipeline = async (req, res) => {
           fieldName = matches[2];
         } else if (
           transformation.includes('string-join') ||
-          /^\[(.*)\]$/.test(transformation)
+          /^\[(.*)\]$/.test(transformation) ||
+          /(.*)\(\[(.*)\](.*)\)/.test(transformation)
         ) {
           output = `DATA.XMLRECORD['${name}_multivalue']`;
         }
@@ -64,7 +195,7 @@ exports.getEtlPipeline = async (req, res) => {
       })
       .join('\n');
 
-    vm = vms.map(({ name }) => `'${name}'`).join(', ');
+    vm = vms.map(({ name }) => `'${name}'`).join(', ') || `''`;
     vs = vss.map(({ name }) => `'${name}'`).join(', ') || `''`;
 
     selectedSingle = singleValues.map(({ name, transformation, type }) => {
@@ -86,9 +217,9 @@ exports.getEtlPipeline = async (req, res) => {
         } else {
           output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.${name},'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
         }
-      } else if (transformation == 'parse date') {
+      } else if (transformation == 'parse_date') {
         output = `PARSE_DATE(DATA.${name}'], 'yyyyMMdd')`;
-      } else if (transformation == 'parse timestamp') {
+      } else if (transformation == 'parse_timestamp') {
         output = `PARSE_TIMESTAMP(DATA.${name}'], 'yyMMddHHmm')`;
       } else if (transformation == 'substring') {
         output = `SUBSTRING(DATA.${name}'],1,35)`;
@@ -117,115 +248,16 @@ exports.getEtlPipeline = async (req, res) => {
       }
       return `\t${output} AS ${fieldName},`;
     });
-
-    selectedMulti = vms.map(({ name, transformation, type }) => {
-      let output;
-      let fieldName = name.startsWith('LOCALREF_')
-        ? name.split('LOCALREF_')[1]
-        : name;
-      if (name === 'INPUTTER_HIS') {
-        output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['INPUTTER_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
-        fieldName = 'INPUTTER_HIS';
-      } else if (transformation === '') {
-        output = `XMLRECORD['${name}']`;
-      } else if (transformation.includes('string-join')) {
-        const pattern = /\('*([^']*)'*\)$/;
-        if (pattern.test(transformation)) {
-          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
-            transformation.match(pattern)[1]
-          }')`;
-        } else {
-          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
-        }
-      } else if (transformation == 'parse date') {
-        output = `PARSE_DATE(DATA.XMLRECORD['${name}'], 'yyyyMMdd')`;
-      } else if (transformation == 'parse timestamp') {
-        output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${name}'], 'yyMMddHHmm')`;
-      } else if (transformation == 'substring') {
-        output = `SUBSTRING(DATA.XMLRECORD['${name}'],1,35)`;
-      } else if (/^\[(.*)\]$/.test(transformation)) {
-        output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
-          transformation.match(/^\[(.*)\]$/)[1]
-        }]`;
-      } else if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
-        const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
-        if (name == 'RECID') {
-          output = matches[1].replace('$', `DATA.RECID`);
-        } else {
-          output = matches[1].replace('$', `DATA.XMLRECORD['${name}']`);
-        }
-        fieldName = matches[2];
-      } else if (/(.*)\(\[(.*)\](.*)\)$/.test(transformation)) {
-        const matches = transformation.match(/(.*)\(\[(.*)\](.*)\)$/);
-        if (/[^,\s]/.test(matches[3])) {
-          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}]${matches[3]})`;
-        } else {
-          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}], 'yyMMddHHmm')`;
-        }
-      }
-      if (type[1] !== 'string') {
-        output = `CAST(${output} AS ${type[1]})`;
-      }
-      return `\t${output} AS ${fieldName},`;
-    });
-
-    selectedFields = selectedSingle.concat(selectedMulti).join('\n');
+    selectedMulti = vms.map(multiHandler);
+    selectedVS = vss.map(multiHandler);
+    selectedFields = selectedSingle
+      .concat(selectedMulti)
+      .concat(selectedVS)
+      .join('\n');
   } else {
     sourceStream = `${schemaName}_MAPPED`;
     stmtSink = await services.getTemplateByName(collectionName, 'SINK');
-
-    selectedFields = singleValues
-      .map(({ name, transformation, type }) => {
-        let output;
-        let fieldName = name.startsWith('LOCALREF_')
-          ? name.split('LOCALREF_')[1]
-          : name;
-        if (name === 'INPUTTER_HIS') {
-          output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['INPUTTER_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
-          fieldName = 'INPUTTER_HIS';
-        } else if (transformation === '') {
-          output = `XMLRECORD['${name}']`;
-        } else if (transformation.includes('string-join')) {
-          const pattern = /\('*([^']*)'*\)$/;
-          if (pattern.test(transformation)) {
-            output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
-              transformation.match(pattern)[1]
-            }')`;
-          } else {
-            output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['${name}_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
-          }
-        } else if (transformation == 'parse date') {
-          output = `PARSE_DATE(DATA.XMLRECORD['${name}'], 'yyyyMMdd')`;
-        } else if (transformation == 'parse timestamp') {
-          output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${name}'], 'yyMMddHHmm')`;
-        } else if (transformation == 'substring') {
-          output = `SUBSTRING(DATA.XMLRECORD['${name}'],1,35)`;
-        } else if (/^\[(.*)\]$/.test(transformation)) {
-          output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
-            transformation.match(/^\[(.*)\]$/)[1]
-          }]`;
-        } else if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
-          const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
-          if (name == 'RECID') {
-            output = matches[1].replace('$', `DATA.RECID`);
-          } else {
-            output = matches[1].replace('$', `DATA.XMLRECORD['${name}']`);
-          }
-          fieldName = matches[2];
-        } else if (/(.*)\(\[(.*)\](.*)\)$/.test(transformation)) {
-          const matches = transformation.match(/(.*)\(\[(.*)\](.*)\)$/);
-          if (/[^,\s]/.test(matches[3])) {
-            output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}]${matches[3]})`;
-          } else {
-            output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}], 'yyMMddHHmm')`;
-          }
-        }
-        if (type[1] !== 'string') {
-          output = `CAST(${output} AS ${type[1]})`;
-        }
-        return `\t${output} AS ${fieldName},`;
-      })
-      .join('\n');
+    selectedFields = singleValues.map(singleHandler).join('\n');
   }
 
   stmtRaw = eval('`' + stmtRaw + '`');
