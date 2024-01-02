@@ -63,26 +63,50 @@ exports.getEtlPipeline = async (req, res) => {
       output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
         transformation.match(/^\[(.*)\]$/)[1]
       }]`;
-    } else if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
-      const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
-      if (name == 'RECID') {
-        output = matches[1].replace('$', `DATA.RECID`);
-      } else {
-        output = matches[1].replace('$', `DATA.XMLRECORD['${name}']`);
-      }
-      fieldName = matches[2];
-    } else if (/(.*)\(\[(.*)\](.*)\)$/.test(transformation)) {
-      const matches = transformation.match(/(.*)\(\[(.*)\](.*)\)$/);
-      if (/[^,\s]/.test(matches[3])) {
-        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}]${matches[3]})`;
-      } else {
-        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}], 'yyMMddHHmm')`;
+    } else if (/(.*)\((.*)\)\s*(.*)$/.test(transformation)) {
+      const matches = transformation.match(/(.*)\((.*)\)\s*(.*)$/);
+
+      let field = `DATA.XMLRECORD['${name}']`;
+
+      fieldName = matches[3];
+      matches[1] = matches[1].toUpperCase();
+      if (/^\$/.test(matches[2])) {
+        if (name === 'RECID') {
+          field = 'DATA.RECID';
+        } else if (transformation.includes('string-join')) {
+          field = `DATA.XMLRECORD['${name}_multivalue']`;
+        }
+
+        output = `${matches[1]}(${matches[2].replace('$', field)})`;
+      } else if (/^\[.*\](.*)$/.test(matches[2])) {
+        const matches2 = matches[2].match(/^\[(.*)\](.*)$/);
+
+        let field = `DATA.XMLRECORD['${name}_multivalue']`;
+        let params;
+
+        if (transformation.includes('parse_date')) {
+          params = `, 'yyyyMMdd'`;
+        } else if (transformation.includes('parse_timestamp')) {
+          params = `, 'yyMMddHHmm'`;
+        } else if (transformation.includes('substring')) {
+          params = `,1,35`;
+        }
+
+        if (name === 'RECID') {
+          field = 'DATA.RECID';
+        }
+
+        if (/[^,\s]/.test(matches2[2])) {
+          params = matches2[2];
+        }
+
+        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
       }
     }
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
-    return `\t${output} AS ${fieldName.toUpperCase()},`;
+    return `\t${output} AS ${fieldName.toUpperCase() || name} ,`;
   };
 
   const multiHandler = ({ name, transformation, type }) => {
@@ -114,23 +138,10 @@ exports.getEtlPipeline = async (req, res) => {
       output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
         transformation.match(/^\[(.*)\]$/)[1]
       }]`;
-      // } else if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
-      //   const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
-      //   if (name == 'RECID') {
-      //     output = matches[1].replace('$', `DATA.RECID`);
-      //   } else {
-      //     output = matches[1].replace('$', `DATA.XMLRECORD['${name}']`);
-      //   }
-      //   fieldName = matches[2];
-      // } else if (/(.*)\(\[(.*)\](.*)\)$/.test(transformation)) {
-      //   const matches = transformation.match(/(.*)\(\[(.*)\](.*)\)$/);
-      //   if (/[^,\s]/.test(matches[3])) {
-      //     output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}]${matches[3]})`;
-      //   } else {
-      //     output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}], 'yyMMddHHmm')`;
-      //   }
     } else if (/(.*)\((.*)\)\s*(.*)$/.test(transformation)) {
       const matches = transformation.match(/(.*)\((.*)\)\s*(.*)$/);
+      fieldName = matches[3];
+      matches[1] = matches[1].toUpperCase();
       if (/^\$/.test(matches[2])) {
         if (name === 'RECID') {
           output = `${matches[1]}(${matches[2].replace('$', `DATA.RECID`)})`;
@@ -163,15 +174,13 @@ exports.getEtlPipeline = async (req, res) => {
           params = matches2[2];
         }
 
-        output = `${matches[1].toUpperCase()}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
-          matches2[1]
-        }]${params})`;
+        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
       }
     }
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
-    return `\t${output} AS ${fieldName.toUpperCase()},`;
+    return `\t${output} AS ${fieldName.toUpperCase() || name},`;
   };
 
   if (vms.length || vss.length) {
@@ -201,7 +210,7 @@ exports.getEtlPipeline = async (req, res) => {
         ) {
           output = `DATA.XMLRECORD['${name}_multivalue']`;
         }
-        return `\t${output} AS ${fieldName.toUpperCase()},`;
+        return `\t${output} AS ${fieldName.toUpperCase() || name},`;
       })
       .join('\n');
 
@@ -237,26 +246,47 @@ exports.getEtlPipeline = async (req, res) => {
         output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
           transformation.match(/^\[(.*)\]$/)[1]
         }]`;
-      } else if (/(.*\(.*\))\s([^,]*),*$/.test(transformation)) {
-        const matches = transformation.match(/(.*\(.*\))\s([^,]*),*$/);
-        if (name == 'RECID') {
-          output = matches[1].replace('$', `DATA.RECID`);
-        } else {
-          output = matches[1].replace('$', `DATA.${matches[2]}`);
-        }
-        fieldName = matches[2];
-      } else if (/(.*)\(\[(.*)\](.*)\)$/.test(transformation)) {
-        const matches = transformation.match(/(.*)\(\[(.*)\](.*)\)$/);
-        if (/[^,\s]/.test(matches[3])) {
-          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}]${matches[3]})`;
-        } else {
-          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches[2]}], 'yyMMddHHmm')`;
+      } else if (/(.*)\((.*)\)\s*(.*)$/.test(transformation)) {
+        const matches = transformation.match(/(.*)\((.*)\)\s*(.*)$/);
+        fieldName = matches[3];
+        matches[1] = matches[1].toUpperCase();
+        if (/^\$/.test(matches[2])) {
+          if (name === 'RECID') {
+            output = `${matches[1]}(${matches[2].replace('$', `DATA.RECID`)})`;
+          } else {
+            output = `${matches[1]}(${matches[2].replace(
+              '$',
+              `DATA.${name}`,
+            )})`;
+          }
+          fieldName = matches[3];
+        } else if (/^\[.*\](.*)$/.test(matches[2])) {
+          const matches2 = matches[2].match(/^\[(.*)\](.*)$/);
+
+          let field = `DATA.${name}`;
+          let params;
+
+          if (transformation.includes('parse_date')) {
+            params = `, 'yyyyMMdd'`;
+          } else if (transformation.includes('parse_timestamp')) {
+            params = `, 'yyMMddHHmm'`;
+          } else if (transformation.includes('substring')) {
+            params = `,1,35`;
+          }
+          if (name === 'RECID') {
+            field = 'DATA.RECID';
+          }
+
+          if (/[^,\s]/.test(matches2[2])) {
+            params = matches2[2];
+          }
+          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
         }
       }
       if (type[1] !== 'string') {
         output = `CAST(${output} AS ${type[1]})`;
       }
-      return `\t${output} AS ${fieldName.toUpperCase()},`;
+      return `\t${output} AS ${fieldName.toUpperCase() || name},`;
     });
     selectedMulti = vms.map(multiHandler);
     selectedVS = vss.map(multiHandler);
