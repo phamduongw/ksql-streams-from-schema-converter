@@ -82,7 +82,7 @@ exports.getEtlPipeline = async (req, res) => {
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
-    return `\t${output} AS ${fieldName},`;
+    return `\t${output} AS ${fieldName.toUpperCase()},`;
   };
 
   const multiHandler = ({ name, transformation, type }) => {
@@ -161,7 +161,7 @@ exports.getEtlPipeline = async (req, res) => {
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
-    return `\t${output} AS ${fieldName},`;
+    return `\t${output} AS ${fieldName.toUpperCase()},`;
   };
 
   if (vms.length || vss.length) {
@@ -191,7 +191,7 @@ exports.getEtlPipeline = async (req, res) => {
         ) {
           output = `DATA.XMLRECORD['${name}_multivalue']`;
         }
-        return `\t${output} AS ${fieldName},`;
+        return `\t${output} AS ${fieldName.toUpperCase()},`;
       })
       .join('\n');
 
@@ -246,7 +246,7 @@ exports.getEtlPipeline = async (req, res) => {
       if (type[1] !== 'string') {
         output = `CAST(${output} AS ${type[1]})`;
       }
-      return `\t${output} AS ${fieldName},`;
+      return `\t${output} AS ${fieldName.toUpperCase()},`;
     });
     selectedMulti = vms.map(multiHandler);
     selectedVS = vss.map(multiHandler);
