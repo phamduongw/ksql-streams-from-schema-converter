@@ -60,9 +60,9 @@ exports.getEtlPipeline = async (req, res) => {
         ) {
           output = `DATA.XMLRECORD['${name}_multivalue']`;
         }
-        return `\t${output} AS ${fieldName}`;
+        return `\t${output} AS ${fieldName},`;
       })
-      .join(',\n');
+      .join('\n');
 
     vm = vms.map(({ name }) => `'${name}'`).join(', ');
     vs = vss.map(({ name }) => `'${name}'`).join(', ') || `''`;
@@ -115,7 +115,7 @@ exports.getEtlPipeline = async (req, res) => {
       if (type[1] !== 'string') {
         output = `CAST(${output} AS ${type[1]})`;
       }
-      return `\t${output} AS ${fieldName}`;
+      return `\t${output} AS ${fieldName},`;
     });
 
     selectedMulti = vms.map(({ name, transformation, type }) => {
@@ -166,10 +166,10 @@ exports.getEtlPipeline = async (req, res) => {
       if (type[1] !== 'string') {
         output = `CAST(${output} AS ${type[1]})`;
       }
-      return `\t${output} AS ${fieldName}`;
+      return `\t${output} AS ${fieldName},`;
     });
 
-    selectedFields = selectedSingle.concat(selectedMulti).join(',\n');
+    selectedFields = selectedSingle.concat(selectedMulti).join('\n');
   } else {
     sourceStream = `${schemaName}_MAPPED`;
     stmtSink = await services.getTemplateByName(collectionName, 'SINK');
@@ -223,9 +223,9 @@ exports.getEtlPipeline = async (req, res) => {
         if (type[1] !== 'string') {
           output = `CAST(${output} AS ${type[1]})`;
         }
-        return `\t${output} AS ${fieldName}`;
+        return `\t${output} AS ${fieldName},`;
       })
-      .join(',\n');
+      .join('\n');
   }
 
   stmtRaw = eval('`' + stmtRaw + '`');
