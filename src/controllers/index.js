@@ -63,8 +63,8 @@ exports.getEtlPipeline = async (req, res) => {
       output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
         transformation.match(/^\[(.*)\]$/)[1]
       }]`;
-    } else if (/(.*)\((.*)\)\s*(.*)$/.test(transformation)) {
-      const matches = transformation.match(/(.*)\((.*)\)\s*(.*)$/);
+    } else if (/^([^\s]*)\((.*)\)\s*(.*)$/.test(transformation)) {
+      const matches = transformation.match(/^([^\s]*)\((.*)\)\s*(.*)$/);
 
       let field = `DATA.XMLRECORD['${name}']`;
 
@@ -102,6 +102,8 @@ exports.getEtlPipeline = async (req, res) => {
 
         output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
       }
+    } else {
+      return `\t${transformation}`;
     }
     output = nested.includes('$') ? nested.replace('$', output) : output;
     if (type[1] !== 'string') {
@@ -139,8 +141,8 @@ exports.getEtlPipeline = async (req, res) => {
       output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
         transformation.match(/^\[(.*)\]$/)[1]
       }]`;
-    } else if (/(.*)\((.*)\)\s*(.*)$/.test(transformation)) {
-      const matches = transformation.match(/(.*)\((.*)\)\s*(.*)$/);
+    } else if (/^([^\s]*)\((.*)\)\s*(.*)$/.test(transformation)) {
+      const matches = transformation.match(/^([^\s]*)\((.*)\)\s*(.*)$/);
       fieldName = matches[3];
       matches[1] = matches[1].toUpperCase();
       if (/^\$/.test(matches[2])) {
@@ -177,6 +179,8 @@ exports.getEtlPipeline = async (req, res) => {
 
         output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
       }
+    } else {
+      return `\t${transformation}`;
     }
     output = nested.includes('$') ? nested.replace('$', output) : output;
     if (type[1] !== 'string') {
@@ -249,8 +253,8 @@ exports.getEtlPipeline = async (req, res) => {
           output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
             transformation.match(/^\[(.*)\]$/)[1]
           }]`;
-        } else if (/(.*)\((.*)\)\s*(.*)$/.test(transformation)) {
-          const matches = transformation.match(/(.*)\((.*)\)\s*(.*)$/);
+        } else if (/^([^\s]*)\((.*)\)\s*(.*)$/.test(transformation)) {
+          const matches = transformation.match(/^([^\s]*)\((.*)\)\s*(.*)$/);
           fieldName = matches[3];
           matches[1] = matches[1].toUpperCase();
           if (/^\$/.test(matches[2])) {
@@ -288,6 +292,8 @@ exports.getEtlPipeline = async (req, res) => {
             }
             output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
           }
+        } else {
+          return `\t${transformation}`;
         }
         output = nested.includes('$') ? nested.replace('$', output) : output;
         if (type[1] !== 'string') {
