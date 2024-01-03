@@ -60,6 +60,8 @@ exports.getEtlPipeline = async (req, res) => {
       output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${name}'], 'yyMMddHHmm')`;
     } else if (transformation == 'substring') {
       output = `SUBSTRING(DATA.XMLRECORD['${name}'],1,35)`;
+    } else if (transformation === 'seab_field') {
+      output = `SEAB_FIELD(DATA.XMLRECORD['${name}'],'_',2)`;
     } else if (/^\[(.*)\]$/.test(transformation)) {
       output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
         transformation.match(/^\[(.*)\]$/)[1]
@@ -91,6 +93,8 @@ exports.getEtlPipeline = async (req, res) => {
           params = `, 'yyMMddHHmm'`;
         } else if (transformation.includes('substring')) {
           params = `,1,35`;
+        } else if (transformation.includes('seab_field')) {
+          params = `,'_',2`;
         }
 
         if (name === 'RECID') {
@@ -138,6 +142,8 @@ exports.getEtlPipeline = async (req, res) => {
       output = `PARSE_TIMESTAMP(DATA.XMLRECORD['${name}'], 'yyMMddHHmm')`;
     } else if (transformation == 'substring') {
       output = `SUBSTRING(DATA.XMLRECORD['${name}'],1,35)`;
+    } else if (transformation === 'seab_field') {
+      output = `SEAB_FIELD(DATA.XMLRECORD['${name}'],'_',2)`;
     } else if (/^\[(.*)\]$/.test(transformation)) {
       output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
         transformation.match(/^\[(.*)\]$/)[1]
@@ -168,6 +174,8 @@ exports.getEtlPipeline = async (req, res) => {
           params = `, 'yyMMddHHmm'`;
         } else if (transformation.includes('substring')) {
           params = `,1,35`;
+        } else if (transformation.includes('seab_field')) {
+          params = `,'_',2`;
         }
 
         if (name === 'RECID') {
@@ -245,11 +253,13 @@ exports.getEtlPipeline = async (req, res) => {
             output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.${name},'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
           }
         } else if (transformation == 'parse_date') {
-          output = `PARSE_DATE(DATA.${name}'], 'yyyyMMdd')`;
+          output = `PARSE_DATE(DATA.${name}, 'yyyyMMdd')`;
         } else if (transformation == 'parse_timestamp') {
-          output = `PARSE_TIMESTAMP(DATA.${name}'], 'yyMMddHHmm')`;
+          output = `PARSE_TIMESTAMP(DATA.${name}, 'yyMMddHHmm')`;
         } else if (transformation == 'substring') {
-          output = `SUBSTRING(DATA.${name}'],1,35)`;
+          output = `SUBSTRING(DATA.${name},1,35)`;
+        } else if (transformation === 'seab_field') {
+          output = `SEAB_FIELD(DATA.${name},'_',2)`;
         } else if (/^\[(.*)\]$/.test(transformation)) {
           output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
             transformation.match(/^\[(.*)\]$/)[1]
@@ -283,6 +293,8 @@ exports.getEtlPipeline = async (req, res) => {
               params = `, 'yyMMddHHmm'`;
             } else if (transformation.includes('substring')) {
               params = `,1,35`;
+            } else if (transformation.includes('seab_field')) {
+              params = `,'_',2`;
             }
             if (name === 'RECID') {
               field = 'DATA.RECID';
