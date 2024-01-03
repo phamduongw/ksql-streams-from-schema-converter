@@ -27,6 +27,7 @@ exports.getEtlPipeline = async (req, res) => {
   let stmtMapped = await services.getTemplateByName(collectionName, procType);
   let stmtMultival;
   let stmtSink;
+  let stmtDdl;
 
   let sourceStream;
   let selectedFields;
@@ -308,21 +309,28 @@ exports.getEtlPipeline = async (req, res) => {
       .concat(selectedMulti)
       .concat(selectedVS)
       .join('\n');
+    stmtDdl = await services.getTemplateByName(
+      collectionName,
+      'DDL_MULTIVALUE',
+    );
   } else {
     sourceStream = `${schemaName}_MAPPED`;
     stmtSink = await services.getTemplateByName(collectionName, 'SINK');
     selectedFields = singleValues.map(singleHandler).join('\n');
+    stmtDdl = await services.getTemplateByName(collectionName, 'DDL_SINGLE');
   }
 
   stmtRaw = eval('`' + stmtRaw + '`');
   stmtMapped = eval('`' + stmtMapped + '`');
   stmtMultival = stmtMultival && eval('`' + stmtMultival + '`');
   stmtSink = eval('`' + stmtSink + '`');
+  stmtDdl = eval('`' + stmtDdl + '`');
   res.status(200).send({
     stmtRaw,
     stmtMapped,
     stmtMultival,
     stmtSink,
+    stmtDdl,
   });
 };
 
