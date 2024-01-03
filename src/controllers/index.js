@@ -34,7 +34,7 @@ exports.getEtlPipeline = async (req, res) => {
   let vm;
   let vs;
 
-  const singleHandler = ({ name, transformation, type }) => {
+  const singleHandler = ({ name, transformation, type, nested }) => {
     let output;
     let fieldName = name.startsWith('LOCALREF_')
       ? name.split('LOCALREF_')[1]
@@ -103,13 +103,14 @@ exports.getEtlPipeline = async (req, res) => {
         output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
       }
     }
+    output = nested.includes('$') ? nested.replace('$', output) : output;
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
     return `\t${output} AS ${fieldName.toUpperCase() || name} ,`;
   };
 
-  const multiHandler = ({ name, transformation, type }) => {
+  const multiHandler = ({ name, transformation, type, nested }) => {
     let output;
     let fieldName = name.startsWith('LOCALREF_')
       ? name.split('LOCALREF_')[1]
@@ -177,6 +178,7 @@ exports.getEtlPipeline = async (req, res) => {
         output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
       }
     }
+    output = nested.includes('$') ? nested.replace('$', output) : output;
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
@@ -217,77 +219,83 @@ exports.getEtlPipeline = async (req, res) => {
     vm = vms.map(({ name }) => `'${name}'`).join(', ') || `''`;
     vs = vss.map(({ name }) => `'${name}'`).join(', ') || `''`;
 
-    selectedSingle = singleValues.map(({ name, transformation, type }) => {
-      let output;
-      let fieldName = name.startsWith('LOCALREF_')
-        ? name.split('LOCALREF_')[1]
-        : name;
-      if (name === 'INPUTTER_HIS') {
-        output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.INPUTTER,'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
-        fieldName = 'INPUTTER_HIS';
-      } else if (transformation === '') {
-        output = `DATA.${name}`;
-      } else if (transformation.includes('string-join')) {
-        const pattern = /\('*([^']*)'*\)$/;
-        if (pattern.test(transformation)) {
-          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.${name},'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
-            transformation.match(pattern)[1]
-          }')`;
-        } else {
-          output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.${name},'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
-        }
-      } else if (transformation == 'parse_date') {
-        output = `PARSE_DATE(DATA.${name}'], 'yyyyMMdd')`;
-      } else if (transformation == 'parse_timestamp') {
-        output = `PARSE_TIMESTAMP(DATA.${name}'], 'yyMMddHHmm')`;
-      } else if (transformation == 'substring') {
-        output = `SUBSTRING(DATA.${name}'],1,35)`;
-      } else if (/^\[(.*)\]$/.test(transformation)) {
-        output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
-          transformation.match(/^\[(.*)\]$/)[1]
-        }]`;
-      } else if (/(.*)\((.*)\)\s*(.*)$/.test(transformation)) {
-        const matches = transformation.match(/(.*)\((.*)\)\s*(.*)$/);
-        fieldName = matches[3];
-        matches[1] = matches[1].toUpperCase();
-        if (/^\$/.test(matches[2])) {
-          if (name === 'RECID') {
-            output = `${matches[1]}(${matches[2].replace('$', `DATA.RECID`)})`;
+    selectedSingle = singleValues.map(
+      ({ name, transformation, type, nested }) => {
+        let output;
+        let fieldName = name.startsWith('LOCALREF_')
+          ? name.split('LOCALREF_')[1]
+          : name;
+        if (name === 'INPUTTER_HIS') {
+          output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.INPUTTER,'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
+          fieldName = 'INPUTTER_HIS';
+        } else if (transformation === '') {
+          output = `DATA.${name}`;
+        } else if (transformation.includes('string-join')) {
+          const pattern = /\('*([^']*)'*\)$/;
+          if (pattern.test(transformation)) {
+            output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.${name},'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
+              transformation.match(pattern)[1]
+            }')`;
           } else {
-            output = `${matches[1]}(${matches[2].replace(
-              '$',
-              `DATA.${name}`,
-            )})`;
+            output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.${name},'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
           }
+        } else if (transformation == 'parse_date') {
+          output = `PARSE_DATE(DATA.${name}'], 'yyyyMMdd')`;
+        } else if (transformation == 'parse_timestamp') {
+          output = `PARSE_TIMESTAMP(DATA.${name}'], 'yyMMddHHmm')`;
+        } else if (transformation == 'substring') {
+          output = `SUBSTRING(DATA.${name}'],1,35)`;
+        } else if (/^\[(.*)\]$/.test(transformation)) {
+          output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+            transformation.match(/^\[(.*)\]$/)[1]
+          }]`;
+        } else if (/(.*)\((.*)\)\s*(.*)$/.test(transformation)) {
+          const matches = transformation.match(/(.*)\((.*)\)\s*(.*)$/);
           fieldName = matches[3];
-        } else if (/^\[.*\](.*)$/.test(matches[2])) {
-          const matches2 = matches[2].match(/^\[(.*)\](.*)$/);
+          matches[1] = matches[1].toUpperCase();
+          if (/^\$/.test(matches[2])) {
+            if (name === 'RECID') {
+              output = `${matches[1]}(${matches[2].replace(
+                '$',
+                `DATA.RECID`,
+              )})`;
+            } else {
+              output = `${matches[1]}(${matches[2].replace(
+                '$',
+                `DATA.${name}`,
+              )})`;
+            }
+            fieldName = matches[3];
+          } else if (/^\[.*\](.*)$/.test(matches[2])) {
+            const matches2 = matches[2].match(/^\[(.*)\](.*)$/);
 
-          let field = `DATA.${name}`;
-          let params;
+            let field = `DATA.${name}`;
+            let params;
 
-          if (transformation.includes('parse_date')) {
-            params = `, 'yyyyMMdd'`;
-          } else if (transformation.includes('parse_timestamp')) {
-            params = `, 'yyMMddHHmm'`;
-          } else if (transformation.includes('substring')) {
-            params = `,1,35`;
-          }
-          if (name === 'RECID') {
-            field = 'DATA.RECID';
-          }
+            if (transformation.includes('parse_date')) {
+              params = `, 'yyyyMMdd'`;
+            } else if (transformation.includes('parse_timestamp')) {
+              params = `, 'yyMMddHHmm'`;
+            } else if (transformation.includes('substring')) {
+              params = `,1,35`;
+            }
+            if (name === 'RECID') {
+              field = 'DATA.RECID';
+            }
 
-          if (/[^,\s]/.test(matches2[2])) {
-            params = matches2[2];
+            if (/[^,\s]/.test(matches2[2])) {
+              params = matches2[2];
+            }
+            output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
           }
-          output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
         }
-      }
-      if (type[1] !== 'string') {
-        output = `CAST(${output} AS ${type[1]})`;
-      }
-      return `\t${output} AS ${fieldName.toUpperCase() || name},`;
-    });
+        output = nested.includes('$') ? nested.replace('$', output) : output;
+        if (type[1] !== 'string') {
+          output = `CAST(${output} AS ${type[1]})`;
+        }
+        return `\t${output} AS ${fieldName.toUpperCase() || name},`;
+      },
+    );
     selectedMulti = vms.map(multiHandler);
     selectedVS = vss.map(multiHandler);
     selectedFields = selectedSingle
