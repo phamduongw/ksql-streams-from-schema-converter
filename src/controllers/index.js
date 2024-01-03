@@ -43,7 +43,7 @@ exports.getEtlPipeline = async (req, res) => {
       output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['INPUTTER_multivalue'],'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
       fieldName = 'INPUTTER_HIS';
     } else if (transformation === '') {
-      output = `XMLRECORD['${name}']`;
+      output = `DATA.XMLRECORD['${name}']`;
     } else if (transformation.includes('string-join')) {
       const pattern = /\('*([^']*)'*\)$/;
       if (pattern.test(transformation)) {
@@ -118,7 +118,7 @@ exports.getEtlPipeline = async (req, res) => {
       output = `SUBSTRING(REGEXP_REPLACE(ARRAY_JOIN(TRANSFORM(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(DATA.XMLRECORD['INPUTTER'],'^s?[0-9]+:',''), '#(s?[0-9]*:)?'),x => SEAB_FIELD(x,'_',2)),' '),'null ',''),1,4000)`;
       fieldName = 'INPUTTER_HIS';
     } else if (transformation === '') {
-      output = `XMLRECORD['${name}']`;
+      output = `DATA.XMLRECORD['${name}']`;
     } else if (transformation.includes('string-join')) {
       const pattern = /\('*([^']*)'*\)$/;
       if (pattern.test(transformation)) {
