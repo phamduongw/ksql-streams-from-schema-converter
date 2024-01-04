@@ -17,18 +17,21 @@ exports.getEtlPipeline = async (req, res) => {
     procData,
   } = req.body;
 
+  // Proc data
   const singleValues = procData.filter(
     (procItem) => procItem['should_parse_sv'],
   );
   const vms = procData.filter((procItem) => procItem['should_parse_vm']);
   const vss = procData.filter((procItem) => procItem['should_parse_vs']);
 
+  // Stmt
   let stmtRaw = await services.getTemplateByName(collectionName, 'RAW');
   let stmtMapped = await services.getTemplateByName(collectionName, procType);
   let stmtMultival;
   let stmtSink;
   let stmtDdl;
 
+  // Template
   let sourceStream;
   let selectedFields;
   let listSelectedField;
@@ -66,21 +69,21 @@ exports.getEtlPipeline = async (req, res) => {
       output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}_multivalue'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
         transformation.match(/^\[(.*)\]$/)[1]
       }]`;
-    } else if (/^([^\s]*)\((.*)\)\s*(.*)$/.test(transformation)) {
-      const matches = transformation.match(/^([^\s]*)\((.*)\)\s*(.*)$/);
+    } else if (/^([^\s(]*)\((.*)\)\s*(.*)$/.test(transformation)) {
+      const matches = transformation.match(/^([^\s(]*)\((.*)\)\s*(.*)$/);
 
       let field = `DATA.XMLRECORD['${name}']`;
 
       fieldName = matches[3];
       matches[1] = matches[1].toUpperCase();
-      if (/^\$/.test(matches[2])) {
+      if (matches[2].includes('$')) {
         if (name === 'RECID') {
           field = 'DATA.RECID';
         } else if (transformation.includes('string-join')) {
           field = `DATA.XMLRECORD['${name}_multivalue']`;
         }
 
-        output = `${matches[1]}(${matches[2].replace('$', field)})`;
+        output = `${matches[1]}(${matches[2].replace(/\$/g, field)})`;
       } else if (/^\[.*\](.*)$/.test(matches[2])) {
         const matches2 = matches[2].match(/^\[(.*)\](.*)$/);
 
@@ -110,7 +113,13 @@ exports.getEtlPipeline = async (req, res) => {
     } else {
       return `\t${transformation}`;
     }
-    output = nested.includes('$') ? nested.replace('$', output) : output;
+
+    if (nested.includes('$')) {
+      const matches = nested.match(/(^.*\))\s*(.*$)/);
+      output = matches[1].replace(/\$/g, output);
+      fieldName = matches[2] || fieldName;
+    }
+
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
@@ -148,16 +157,16 @@ exports.getEtlPipeline = async (req, res) => {
       output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.XMLRECORD['${name}'], '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
         transformation.match(/^\[(.*)\]$/)[1]
       }]`;
-    } else if (/^([^\s]*)\((.*)\)\s*(.*)$/.test(transformation)) {
-      const matches = transformation.match(/^([^\s]*)\((.*)\)\s*(.*)$/);
+    } else if (/^([^\s(]*)\((.*)\)\s*(.*)$/.test(transformation)) {
+      const matches = transformation.match(/^([^\s(]*)\((.*)\)\s*(.*)$/);
       fieldName = matches[3];
       matches[1] = matches[1].toUpperCase();
-      if (/^\$/.test(matches[2])) {
+      if (matches[2].includes('$')) {
         if (name === 'RECID') {
-          output = `${matches[1]}(${matches[2].replace('$', `DATA.RECID`)})`;
+          output = `${matches[1]}(${matches[2].replace(/\$/g, `DATA.RECID`)})`;
         } else {
           output = `${matches[1]}(${matches[2].replace(
-            '$',
+            /\$/g,
             `DATA.XMLRECORD['${name}']`,
           )})`;
         }
@@ -191,7 +200,13 @@ exports.getEtlPipeline = async (req, res) => {
     } else {
       return `\t${transformation}`;
     }
-    output = nested.includes('$') ? nested.replace('$', output) : output;
+
+    if (nested.includes('$')) {
+      const matches = nested.match(/(^.*\))\s*(.*$)/);
+      output = matches[1].replace(/\$/g, output);
+      fieldName = matches[2] || fieldName;
+    }
+
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
@@ -264,19 +279,19 @@ exports.getEtlPipeline = async (req, res) => {
           output = `FILTER(REGEXP_SPLIT_TO_ARRAY(DATA.${name}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
             transformation.match(/^\[(.*)\]$/)[1]
           }]`;
-        } else if (/^([^\s]*)\((.*)\)\s*(.*)$/.test(transformation)) {
-          const matches = transformation.match(/^([^\s]*)\((.*)\)\s*(.*)$/);
+        } else if (/^([^\s(]*)\((.*)\)\s*(.*)$/.test(transformation)) {
+          const matches = transformation.match(/^([^\s(]*)\((.*)\)\s*(.*)$/);
           fieldName = matches[3];
           matches[1] = matches[1].toUpperCase();
-          if (/^\$/.test(matches[2])) {
+          if (matches[2].includes('$')) {
             if (name === 'RECID') {
               output = `${matches[1]}(${matches[2].replace(
-                '$',
+                /\$/g,
                 `DATA.RECID`,
               )})`;
             } else {
               output = `${matches[1]}(${matches[2].replace(
-                '$',
+                /\$/g,
                 `DATA.${name}`,
               )})`;
             }
@@ -308,7 +323,13 @@ exports.getEtlPipeline = async (req, res) => {
         } else {
           return `\t${transformation}`;
         }
-        output = nested.includes('$') ? nested.replace('$', output) : output;
+
+        if (nested.includes('$')) {
+          const matches = nested.match(/(^.*\))\s*(.*$)/);
+          output = matches[1].replace(/\$/g, output);
+          fieldName = matches[2] || fieldName;
+        }
+
         if (type[1] !== 'string') {
           output = `CAST(${output} AS ${type[1]})`;
         }
