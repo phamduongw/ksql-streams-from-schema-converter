@@ -84,7 +84,11 @@ exports.getEtlPipeline = async (req, res) => {
           field = `DATA.XMLRECORD['${name}_multivalue']`;
         }
 
-        output = `${matches[1]}(${matches[2].replace(/\$/g, field)})`;
+        if (/\$\$/g.test(matches[2])) {
+          output = `${matches[1]}(${matches[2].replace(/\$\$/g, name)})`;
+        } else {
+          output = `${matches[1]}(${matches[2].replace(/\$/g, field)})`;
+        }
       } else if (/^\[.*\](.*)$/.test(matches[2])) {
         const matches2 = matches[2].match(/^\[(.*)\](.*)$/);
 
@@ -164,12 +168,23 @@ exports.getEtlPipeline = async (req, res) => {
       matches[1] = matches[1].toUpperCase();
       if (matches[2].includes('$')) {
         if (name === 'RECID') {
-          output = `${matches[1]}(${matches[2].replace(/\$/g, `DATA.RECID`)})`;
+          if (/\$\$/g.test(matches[2])) {
+            output = `${matches[1]}(${matches[2].replace(/\$\$/g, name)})`;
+          } else {
+            output = `${matches[1]}(${matches[2].replace(
+              /\$/g,
+              `DATA.RECID`,
+            )})`;
+          }
         } else {
-          output = `${matches[1]}(${matches[2].replace(
-            /\$/g,
-            `DATA.XMLRECORD['${name}']`,
-          )})`;
+          if (/\$\$/g.test(matches[2])) {
+            output = `${matches[1]}(${matches[2].replace(/\$\$/g, name)})`;
+          } else {
+            output = `${matches[1]}(${matches[2].replace(
+              /\$/g,
+              `DATA.XMLRECORD['${name}']`,
+            )})`;
+          }
         }
         fieldName = matches[3];
       } else if (/^\[.*\](.*)$/.test(matches[2])) {
@@ -294,15 +309,23 @@ exports.getEtlPipeline = async (req, res) => {
           matches[1] = matches[1].toUpperCase();
           if (matches[2].includes('$')) {
             if (name === 'RECID') {
-              output = `${matches[1]}(${matches[2].replace(
-                /\$/g,
-                `DATA.RECID`,
-              )})`;
+              if (/\$\$/g.test(matches[2])) {
+                output = `${matches[1]}(${matches[2].replace(/\$\$/g, name)})`;
+              } else {
+                output = `${matches[1]}(${matches[2].replace(
+                  /\$/g,
+                  `DATA.RECID`,
+                )})`;
+              }
             } else {
-              output = `${matches[1]}(${matches[2].replace(
-                /\$/g,
-                `DATA.${name}`,
-              )})`;
+              if (/\$\$/g.test(matches[2])) {
+                output = `${matches[1]}(${matches[2].replace(/\$\$/g, name)})`;
+              } else {
+                output = `${matches[1]}(${matches[2].replace(
+                  /\$/g,
+                  `DATA.${name}`,
+                )})`;
+              }
             }
             fieldName = matches[3];
           } else if (/^\[.*\](.*)$/.test(matches[2])) {
