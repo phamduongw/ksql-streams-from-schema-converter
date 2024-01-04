@@ -25,8 +25,8 @@ exports.getEtlPipeline = async (req, res) => {
   const vss = procData.filter((procItem) => procItem['should_parse_vs']);
 
   // Stmt
-  let stmtRaw = await services.getTemplateByName(collectionName, 'RAW');
-  let stmtMapped = await services.getTemplateByName(collectionName, procType);
+  let stmtRaw;
+  let stmtMapped;
   let stmtMultival;
   let stmtSink;
   let stmtDdl;
@@ -38,7 +38,8 @@ exports.getEtlPipeline = async (req, res) => {
   let vm;
   let vs;
 
-  const singleHandler = ({ name, transformation, type, nested }) => {
+  // Parser
+  const singleParser = ({ name, transformation, type, nested }) => {
     let output;
     let fieldName = name.startsWith('LOCALREF_')
       ? name.split('LOCALREF_')[1]
@@ -126,7 +127,7 @@ exports.getEtlPipeline = async (req, res) => {
     return `\t${output} AS ${fieldName.toUpperCase() || name} ,`;
   };
 
-  const multiHandler = ({ name, transformation, type, nested }) => {
+  const multiParser = ({ name, transformation, type, nested }) => {
     let output;
     let fieldName = name.startsWith('LOCALREF_')
       ? name.split('LOCALREF_')[1]
@@ -213,8 +214,15 @@ exports.getEtlPipeline = async (req, res) => {
     return `\t${output} AS ${fieldName.toUpperCase() || name},`;
   };
 
-  if (vms.length || vss.length) {
-    sourceStream = `${schemaName}_MULTIVALUE`;
+  // Handler
+  const singleHandler = async () => {
+    stmtSink = await services.getTemplateByName(collectionName, 'SINK');
+    stmtDdl = await services.getTemplateByName(collectionName, 'DDL_SINGLE');
+    sourceStream = `${schemaName}_MAPPED`;
+    selectedFields = singleValues.map(singleParser).join('\n');
+  };
+
+  const multiHandler = async () => {
     stmtSink = await services.getTemplateByName(
       collectionName,
       'SINK_MULTIVALUE',
@@ -223,6 +231,7 @@ exports.getEtlPipeline = async (req, res) => {
       collectionName,
       'MULTIVALUE',
     );
+    sourceStream = `${schemaName}_MULTIVALUE`;
 
     listSelectedField = singleValues
       .map(({ name, transformation }) => {
@@ -336,8 +345,8 @@ exports.getEtlPipeline = async (req, res) => {
         return `\t${output} AS ${fieldName.toUpperCase() || name},`;
       },
     );
-    selectedMulti = vms.map(multiHandler);
-    selectedVS = vss.map(multiHandler);
+    selectedMulti = vms.map(multiParser);
+    selectedVS = vss.map(multiParser);
     selectedFields = selectedSingle
       .concat(selectedMulti)
       .concat(selectedVS)
@@ -346,13 +355,45 @@ exports.getEtlPipeline = async (req, res) => {
       collectionName,
       'DDL_MULTIVALUE',
     );
-  } else {
-    sourceStream = `${schemaName}_MAPPED`;
-    stmtSink = await services.getTemplateByName(collectionName, 'SINK');
-    selectedFields = singleValues.map(singleHandler).join('\n');
-    stmtDdl = await services.getTemplateByName(collectionName, 'DDL_SINGLE');
-  }
+  };
 
+  if (procType === 'XML') {
+    stmtRaw = await services.getTemplateByName(collectionName, 'RAW');
+    stmtMapped = await services.getTemplateByName(collectionName, 'XML');
+
+    if (vms.length || vss.length) {
+      await multiHandler();
+    } else {
+      await singleHandler();
+    }
+  } else if (procType === 'BLOB') {
+    stmtRaw = await services.getTemplateByName(collectionName, 'BLOB_RAW');
+
+    if (blobDelim === 'FE') {
+      stmtMapped = await services.getTemplateByName(
+        collectionName,
+        'BLOB_PARSE_T24',
+      );
+      await singleHandler();
+    } else if (blobDelim === 'FEFD') {
+      stmtMapped = await services.getTemplateByName(
+        collectionName,
+        'BLOB_PARSE_T24',
+      );
+      if (vms.length || vss.length) {
+        await multiHandler();
+      } else {
+        await singleHandler();
+      }
+    } else if (blobDelim === 'SPLIT') {
+      stmtMapped = await services.getTemplateByName(
+        collectionName,
+        'BLOB_SPLIT',
+      );
+      stmtSink = await services.getTemplateByName(collectionName, 'SINK_BLOB');
+      await singleHandler();
+    }
+  }
   stmtRaw = eval('`' + stmtRaw + '`');
   stmtMapped = eval('`' + stmtMapped + '`');
   stmtMultival = stmtMultival && eval('`' + stmtMultival + '`');
