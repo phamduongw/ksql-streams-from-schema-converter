@@ -229,8 +229,98 @@ exports.getEtlPipeline = async (req, res) => {
     return `\t${output} AS ${fieldName.toUpperCase() || name},`;
   };
 
+  const singleSplitBlobParser = ({ name, transformation, type, nested }) => {
+    let output;
+    let fieldName = name.startsWith('LOCALREF_')
+      ? name.split('LOCALREF_')[1]
+      : name;
+    if (transformation === '') {
+      output = `SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex'))`;
+    } else if (transformation.includes('string-join')) {
+      const pattern = /\('*([^']*)'*\)$/;
+      if (pattern.test(transformation)) {
+        output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex')),'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),'${
+          transformation.match(pattern)[1]
+        }')`;
+      } else {
+        output = `ARRAY_JOIN(FILTER(REGEXP_SPLIT_TO_ARRAY(REGEXP_REPLACE(SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex')),'^s?[0-9]+:',''), '#(s?[0-9]+:)?'),(X) => (X <> '')),' ')`;
+      }
+    } else if (transformation == 'parse_date') {
+      output = `PARSE_DATE(SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex')), 'yyyyMMdd')`;
+    } else if (transformation == 'parse_timestamp') {
+      output = `PARSE_TIMESTAMP(SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex')), 'yyMMddHHmm')`;
+    } else if (transformation == 'substring') {
+      output = `SUBSTRING(SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex')),1,35)`;
+    } else if (transformation === 'seab_field') {
+      output = `SEAB_FIELD(SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex')),'_',2)`;
+    } else if (/^\[(.*)\]$/.test(transformation)) {
+      output = `FILTER(REGEXP_SPLIT_TO_ARRAY(SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex')), '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+        transformation.match(/^\[(.*)\]$/)[1]
+      }]`;
+    } else if (/^([^\s(]*)\((.*)\)\s*(.*)$/.test(transformation)) {
+      const matches = transformation.match(/^([^\s(]*)\((.*)\)\s*(.*)$/);
+
+      let field = `SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex'))`;
+
+      fieldName = matches[3];
+      matches[1] = matches[1].toUpperCase();
+      if (matches[2].includes('$')) {
+        if (name === 'RECID') {
+          field = 'DATA.RECID';
+        } else if (transformation.includes('string-join')) {
+          field = `SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex'))`;
+        }
+
+        if (/\$\$/g.test(matches[2])) {
+          output = `${matches[1]}(${matches[2].replace(/\$\$/g, name)})`;
+        } else {
+          output = `${matches[1]}(${matches[2].replace(/\$/g, field)})`;
+        }
+      } else if (/^\[.*\](.*)$/.test(matches[2])) {
+        const matches2 = matches[2].match(/^\[(.*)\](.*)$/);
+
+        let field = `SEAB_HEXTOTEXT(FROM_BYTES(DATA.XMLRECORD->VALUE, 'hex'))`;
+        let params;
+
+        if (transformation.includes('parse_date')) {
+          params = `, 'yyyyMMdd'`;
+        } else if (transformation.includes('parse_timestamp')) {
+          params = `, 'yyMMddHHmm'`;
+        } else if (transformation.includes('substring')) {
+          params = `,1,35`;
+        } else if (transformation.includes('seab_field')) {
+          params = `,'_',2`;
+        }
+
+        if (name === 'RECID') {
+          field = 'DATA.RECID';
+        }
+
+        if (/[^,\s]/.test(matches2[2])) {
+          params = matches2[2];
+        }
+
+        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
+      }
+    } else {
+      return `\t${transformation}`;
+    }
+
+    if (nested.includes('$')) {
+      const matches = nested.match(/(^.*\))\s*(.*$)/);
+      output = matches[1].replace(/\$/g, output);
+      fieldName = matches[2] || fieldName;
+    }
+
+    if (type[1] !== 'string') {
+      output = `CAST(${output} AS ${type[1]})`;
+    }
+    return `\t${output} AS ${fieldName.toUpperCase() || name} ,`;
+  };
+
   // Handler
   const singleHandler = async () => {
+    stmtSink = await services.getTemplateByName(collectionName, 'SINK');
     stmtDdl = await services.getTemplateByName(collectionName, 'DDL_SINGLE');
     sourceStream = `${schemaName}_MAPPED`;
     selectedFields = singleValues.map(singleParser).join('\n');
@@ -387,7 +477,6 @@ exports.getEtlPipeline = async (req, res) => {
       await multiHandler();
     } else {
       await singleHandler();
-      stmtSink = await services.getTemplateByName(collectionName, 'SINK');
     }
   } else if (procType === 'BLOB') {
     stmtRaw = await services.getTemplateByName(collectionName, 'BLOB_RAW');
@@ -398,7 +487,6 @@ exports.getEtlPipeline = async (req, res) => {
         'BLOB_PARSE_T24',
       );
       await singleHandler();
-      stmtSink = await services.getTemplateByName(collectionName, 'SINK');
     } else if (blobDelim === 'FEFD') {
       stmtMapped = await services.getTemplateByName(
         collectionName,
@@ -408,15 +496,15 @@ exports.getEtlPipeline = async (req, res) => {
         await multiHandler();
       } else {
         await singleHandler();
-        stmtSink = await services.getTemplateByName(collectionName, 'SINK');
       }
     } else if (blobDelim === 'SPLIT') {
       stmtMapped = await services.getTemplateByName(
         collectionName,
         'BLOB_SPLIT',
       );
-      stmtSink = await services.getTemplateByName(collectionName, 'SINK_BLOB');
       await singleHandler();
+      stmtSink = await services.getTemplateByName(collectionName, 'SINK_BLOB');
+      selectedFields = singleValues.map(singleSplitBlobParser).join('\n');
     }
   }
   stmtRaw = eval('`' + stmtRaw + '`');
