@@ -113,7 +113,11 @@ exports.getEtlPipeline = async (req, res) => {
           params = matches2[2];
         }
 
-        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
+        output = `${
+          matches[1]
+        }(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+          matches2[1]
+        }]${params || ''})`;
       }
     } else {
       return `\t${transformation}`;
@@ -211,7 +215,11 @@ exports.getEtlPipeline = async (req, res) => {
           params = matches2[2];
         }
 
-        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
+        output = `${
+          matches[1]
+        }(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+          matches2[1]
+        }]${params || ''})`;
       }
     } else {
       return `\t${transformation}`;
@@ -300,7 +308,11 @@ exports.getEtlPipeline = async (req, res) => {
           params = matches2[2];
         }
 
-        output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
+        output = `${
+          matches[1]
+        }(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+          matches2[1]
+        }]${params || ''})`;
       }
     } else {
       return `\t${transformation}`;
@@ -439,7 +451,11 @@ exports.getEtlPipeline = async (req, res) => {
             if (/[^,\s]/.test(matches2[2])) {
               params = matches2[2];
             }
-            output = `${matches[1]}(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${matches2[1]}]${params})`;
+            output = `${
+              matches[1]
+            }(FILTER(REGEXP_SPLIT_TO_ARRAY(${field}, '(^s?[0-9]+:|#(s?[0-9]+:)?)'), (X) => (X <> ''))[${
+              matches2[1]
+            }]${params || ''})`;
           }
         } else {
           return `\t${transformation}`;
