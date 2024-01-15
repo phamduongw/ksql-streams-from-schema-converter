@@ -231,7 +231,6 @@ exports.getEtlPipeline = async (req, res) => {
 
   // Handler
   const singleHandler = async () => {
-    stmtSink = await services.getTemplateByName(collectionName, 'SINK');
     stmtDdl = await services.getTemplateByName(collectionName, 'DDL_SINGLE');
     sourceStream = `${schemaName}_MAPPED`;
     selectedFields = singleValues.map(singleParser).join('\n');
@@ -388,6 +387,7 @@ exports.getEtlPipeline = async (req, res) => {
       await multiHandler();
     } else {
       await singleHandler();
+      stmtSink = await services.getTemplateByName(collectionName, 'SINK');
     }
   } else if (procType === 'BLOB') {
     stmtRaw = await services.getTemplateByName(collectionName, 'BLOB_RAW');
@@ -398,6 +398,7 @@ exports.getEtlPipeline = async (req, res) => {
         'BLOB_PARSE_T24',
       );
       await singleHandler();
+      stmtSink = await services.getTemplateByName(collectionName, 'SINK');
     } else if (blobDelim === 'FEFD') {
       stmtMapped = await services.getTemplateByName(
         collectionName,
@@ -407,6 +408,7 @@ exports.getEtlPipeline = async (req, res) => {
         await multiHandler();
       } else {
         await singleHandler();
+        stmtSink = await services.getTemplateByName(collectionName, 'SINK');
       }
     } else if (blobDelim === 'SPLIT') {
       stmtMapped = await services.getTemplateByName(
