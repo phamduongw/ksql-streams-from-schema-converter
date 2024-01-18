@@ -41,12 +41,16 @@ exports.getEtlPipeline = async (req, res) => {
   // Added field comment
   const addedFieldComment = (alias, doc, name) => {
     const aliasPart = alias.match(/^c(\d*)(?:_m(\d*))*$/);
-    return ` -- add field ${name} - ${alias} || INSERT INTO T24BNK.STANDARD_SELECTION_MANUAL (PREFIX, TABLE_NAME, FIELD_NAME, FIELD_FM, FIELD_VM, FIELD_SINGLE_MULTI, DATA_TYPE) VALUES('FBNK', '${schemaName.replace(
-      /_/g,
-      '.',
-    )}', '${name.replace(/_/g, '.')}', ${aliasPart[1]}, ${
-      aliasPart[2] || null
-    }, '${doc || 'S'}', 'VARCHAR2'); commit;`;
+    try {
+      return ` -- add field ${name} - ${alias} || INSERT INTO T24BNK.STANDARD_SELECTION_MANUAL (PREFIX, TABLE_NAME, FIELD_NAME, FIELD_FM, FIELD_VM, FIELD_SINGLE_MULTI, DATA_TYPE) VALUES('FBNK', '${schemaName.replace(
+        /_/g,
+        '.',
+      )}', '${name.replace(/_/g, '.')}', ${aliasPart[1]}, ${
+        aliasPart[2] || null
+      }, '${doc || 'S'}', 'VARCHAR2'); commit;`;
+    } catch {
+      return ' -- INPUT FORMAT ERROR';
+    }
   };
 
   // Parser
