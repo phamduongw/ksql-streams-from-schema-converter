@@ -38,8 +38,27 @@ exports.getEtlPipeline = async (req, res) => {
   let vm;
   let vs;
 
+  // Added field comment
+  const addedFieldComment = (alias, doc, name) => {
+    const aliasPart = alias.match(/^c(\d*)(?:_m(\d*))*$/);
+    return ` -- add field ${name} - ${alias} || INSERT INTO T24BNK.STANDARD_SELECTION_MANUAL (PREFIX, TABLE_NAME, FIELD_NAME, FIELD_FM, FIELD_VM, FIELD_SINGLE_MULTI, DATA_TYPE) VALUES('FBNK', '${schemaName.replace(
+      /_/g,
+      '.',
+    )}', '${name.replace(/_/g, '.')}', ${aliasPart[1]}, ${
+      aliasPart[2] || null
+    }, '${doc || 'S'}', 'VARCHAR2'); commit;`;
+  };
+
   // Parser
-  const singleParser = ({ name, transformation, type, nested }) => {
+  const singleParser = ({
+    aliases,
+    doc,
+    name,
+    transformation,
+    type,
+    nested,
+    isAddedField,
+  }) => {
     let output;
     let fieldName = name.startsWith('LOCALREF_')
       ? name.split('LOCALREF_')[1]
@@ -132,10 +151,29 @@ exports.getEtlPipeline = async (req, res) => {
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
-    return `\t${output} AS ${fieldName.toUpperCase() || name} ,`;
+
+    let comment = '';
+
+    if (isAddedField) {
+      if (aliases[0]) {
+        comment = addedFieldComment(aliases[0], doc, name);
+      } else {
+        comment = ` -- add field ${name} AS ${fieldName.toUpperCase() || name}`;
+      }
+    }
+
+    return `\t${output} AS ${fieldName.toUpperCase() || name} ,${comment}`;
   };
 
-  const multiParser = ({ name, transformation, type, nested }) => {
+  const multiParser = ({
+    aliases,
+    doc,
+    name,
+    transformation,
+    type,
+    nested,
+    isAddedField,
+  }) => {
     let output;
     let fieldName = name.startsWith('LOCALREF_')
       ? name.split('LOCALREF_')[1]
@@ -234,10 +272,29 @@ exports.getEtlPipeline = async (req, res) => {
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
-    return `\t${output} AS ${fieldName.toUpperCase() || name},`;
+
+    let comment = '';
+
+    if (isAddedField) {
+      if (aliases[0]) {
+        comment = addedFieldComment(aliases[0], doc, name);
+      } else {
+        comment = ` -- add field ${name} AS ${fieldName.toUpperCase() || name}`;
+      }
+    }
+
+    return `\t${output} AS ${fieldName.toUpperCase() || name} ,${comment}`;
   };
 
-  const singleSplitBlobParser = ({ name, transformation, type, nested }) => {
+  const singleSplitBlobParser = ({
+    aliases,
+    doc,
+    name,
+    transformation,
+    type,
+    nested,
+    isAddedField,
+  }) => {
     let output;
     let fieldName = name.startsWith('LOCALREF_')
       ? name.split('LOCALREF_')[1]
@@ -327,7 +384,18 @@ exports.getEtlPipeline = async (req, res) => {
     if (type[1] !== 'string') {
       output = `CAST(${output} AS ${type[1]})`;
     }
-    return `\t${output} AS ${fieldName.toUpperCase() || name} ,`;
+
+    let comment = '';
+
+    if (isAddedField) {
+      if (aliases[0]) {
+        comment = addedFieldComment(aliases[0], doc, name);
+      } else {
+        comment = ` -- add field ${name} AS ${fieldName.toUpperCase() || name}`;
+      }
+    }
+
+    return `\t${output} AS ${fieldName.toUpperCase() || name} ,${comment}`;
   };
 
   // Handler
@@ -373,7 +441,7 @@ exports.getEtlPipeline = async (req, res) => {
     vs = vss.map(({ name }) => `'${name}'`).join(', ') || `''`;
 
     selectedSingle = singleValues.map(
-      ({ name, transformation, type, nested }) => {
+      ({ aliases, doc, name, transformation, type, nested, isAddedField }) => {
         let output;
         let fieldName = name.startsWith('LOCALREF_')
           ? name.split('LOCALREF_')[1]
@@ -470,7 +538,20 @@ exports.getEtlPipeline = async (req, res) => {
         if (type[1] !== 'string') {
           output = `CAST(${output} AS ${type[1]})`;
         }
-        return `\t${output} AS ${fieldName.toUpperCase() || name},`;
+
+        let comment = '';
+
+        if (isAddedField) {
+          if (aliases[0]) {
+            comment = addedFieldComment(aliases[0], doc, name);
+          } else {
+            comment = ` -- add field ${name} AS ${
+              fieldName.toUpperCase() || name
+            }`;
+          }
+        }
+
+        return `\t${output} AS ${fieldName.toUpperCase() || name} ,${comment}`;
       },
     );
     selectedMulti = vms.map(multiParser);
